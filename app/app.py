@@ -203,6 +203,98 @@ def cleanup_old_files():
                 logging.info(f"Deleted old file: {filename}")
     except Exception as e:
         logging.error(f"Error during file cleanup: {e}")
+    def main():
+    st.title("RE-DACT")
+    st.text("Enhanced Data Protection Tool")
+    st.text("Built with Streamlit, spaCy, and BioBERT")
+
+    activities = ["Data Protection", "Entity Analysis", "Downloads", "About"]
+    choice = st.sidebar.selectbox("Select Task", activities)
+
+    if choice == "Data Protection":
+        st.subheader("Data Protection Options")
+        
+        uploaded_file = st.file_uploader("Choose a file", type=['txt', 'csv'])
+        if uploaded_file is not None:
+            rawtext = uploaded_file.getvalue().decode("utf-8")
+        else:
+            rawtext = st.text_area("Or enter text", "Type Here", height=300)
+        
+        all_entity_types = list(nlp.get_pipe("ner").labels) + ["EMAIL"]
+        entity_types = st.multiselect("Select entity types to protect", all_entity_types, default=DEFAULT_ENTITY_TYPES)
+        
+        custom_words = st.text_input("Enter custom words to protect (comma-separated)")
+        custom_word_list = [word.strip() for word in custom_words.split(',') if word.strip()] if custom_words else None
+        
+        protection_method = st.radio("Select Protection Method", ("Data Redaction", "Data Masking", "Data Anonymization"))
+        
+        if protection_method == "Data Redaction":
+            redaction_level = st.radio("Select Redaction Level", ("High", "Medium", "Low"))
+        
+        # Add a button for medical text processing
+        use_biobert = st.button("Process Medical Text")
+        
+        if st.button("Process") or use_biobert:
+            if not rawtext or rawtext == "Type Here":
+                st.error("Please enter some text to protect or upload a file.")
+            elif not entity_types and not custom_word_list and not use_biobert:
+                st.error("Please select at least one entity type to protect or enter custom words.")
+            else:
+                with st.spinner("Processing text..."):
+                    if use_biobert:
+                        result = process_medical_text(rawtext)
+                    elif protection_method == "Data Redaction":
+                        result, _ = redact_entities(rawtext, entity_types, custom_word_list, redaction_level)
+                    elif protection_method == "Data Masking":
+                        result = mask_data(rawtext, entity_types, custom_word_list)
+                    else:  # Data Anonymization
+                        result = anonymize_data(rawtext, entity_types, custom_word_list)
+
+                st.write("Processed Text:")
+                st.write(result)
+                
+                filename = f"{protection_method.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                st.markdown(get_download_link(result, filename, f"Download {protection_method} Text"), unsafe_allow_html=True)
+                save_download_history(filename)
+
+    elif choice == "Entity Analysis":
+        st.subheader("Entity Analysis")
+        rawtext = st.text_area("Enter text for analysis", "Type Here", height=300)
+        if st.button("Analyze"):
+            if not rawtext or rawtext == "Type Here":
+                st.error("Please enter some text to analyze.")
+            else:
+                with st.spinner("Analyzing text..."):
+                    entity_counts = get_entity_counts(rawtext)
+                st.write("Entity Counts:")
+                for entity, count in entity_counts.items():
+                    st.write(f"{entity}: {count}")
+
+    elif choice == "Downloads":
+        st.subheader("Download History")
+        history = get_download_history()
+        if history:
+            for item in history:
+                st.write(f"{item['timestamp']}: {item['filename']}")
+                file_path = os.path.join(UPLOAD_FOLDER, item['filename'])
+                if os.path.exists(file_path):
+                    with open(file_path, 'r') as f:
+                        st.download_button(f"Download {item['filename']}", f.read(), item['filename'])
+                else:
+                    st.write(f"File {item['filename']} no longer exists.")
+        else:
+            st.write("No download history available.")
+
+    elif choice == "About":
+        st.subheader("About")
+        st.write("This is an enhanced data protection tool built with Streamlit, spaCy, and BioBERT.")
+        st.write("Features include:")
+        st.write("- Data Redaction: Obscures or blacks out sensitive or confidential information")
+    
+    cleanup_old_files()
+    
+if __name__ == "__main__":
+    main()
 def get_audit_logs():
     """
     Retrieve all audit logs from the blockchain.
