@@ -141,6 +141,68 @@ def anonymize_data(text: str, entity_types: List[str], custom_words: Optional[Li
             anonymized_text = anonymized_text[:ent.start_char] + anonymous_id + anonymized_text[ent.end_char:]
 
     return anonymized_text
+def get_entity_counts(text: str) -> Dict[str, int]:
+    doc = nlp(text)
+    entity_counts = {}
+    for ent in doc.ents:
+        entity_counts[ent.label_] = entity_counts.get(ent.label_, 0) + 1
+    
+    email_matches = email_matcher(doc)
+    entity_counts["EMAIL"] = len(email_matches)
+    
+    return entity_counts
+
+def get_download_link(text: str, filename: str, link_text: str) -> str:
+    file_path = os.path.join(UPLOAD_FOLDER, filename)
+    with open(file_path, "w") as f:
+        f.write(text)
+    
+    with open(file_path, "rb") as f:
+        bytes_data = f.read()
+    
+    b64 = base64.b64encode(bytes_data).decode()
+    return f'<a href="data:file/txt;base64,{b64}" download="{filename}">{link_text}</a>'
+
+def save_download_history(filename: str):
+    try:
+        history = []
+        if os.path.exists(DOWNLOAD_HISTORY_FILE):
+            with open(DOWNLOAD_HISTORY_FILE, 'r') as f:
+                history = json.load(f)
+        
+        history.append({
+            'filename': filename,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        with open(DOWNLOAD_HISTORY_FILE, 'w') as f:
+            json.dump(history, f)
+        logging.info(f"Download history updated: {filename}")
+    except Exception as e:
+        logging.error(f"Error saving download history: {e}")
+        st.error(f"Error saving download history: {e}")
+
+def get_download_history() -> List[Dict[str, str]]:
+    if os.path.exists(DOWNLOAD_HISTORY_FILE):
+        try:
+            with open(DOWNLOAD_HISTORY_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logging.error(f"Error retrieving download history: {e}")
+            st.error(f"Error retrieving download history: {e}")
+    return []
+
+def cleanup_old_files():
+    try:
+        current_time = datetime.now()
+        for filename in os.listdir(UPLOAD_FOLDER):
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            file_modified = datetime.fromtimestamp(os.path.getmtime(file_path))
+            if current_time - file_modified > timedelta(days=FILE_RETENTION_DAYS):
+                os.remove(file_path)
+                logging.info(f"Deleted old file: {filename}")
+    except Exception as e:
+        logging.error(f"Error during file cleanup: {e}")
 def get_audit_logs():
     """
     Retrieve all audit logs from the blockchain.
