@@ -28,6 +28,8 @@ import pyrebase
 import easyocr
 from PIL import Image, ImageDraw
 
+
+
 SENSITIVE_PATTERNS = {
         'email': r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
         'name': r'\b[A-Z][a-z]+\b',  # Simple pattern for names (first letter capitalized)
@@ -184,7 +186,7 @@ blockchain_url = (
 )
 web3 = Web3(Web3.HTTPProvider(blockchain_url))
 
-contract_address = "0x319758d08c5155fDf39D6c8601Cb745795d4C4cD"  # Replace with your deployed contract address
+contract_address = "0x41ed3031dA1C3f9E2560B2dAF7472cA862516D3D"  # Replace with your deployed contract address
 
 # Use the user's suggested approach
 compiled_contract_path = os.path.join(
@@ -251,37 +253,54 @@ def add_audit_log(user_id: str, data_hash: str, action: str, timestamp: str, use
         receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
 
         print(f"Log added to blockchain. Transaction Hash: {tx_hash.hex()}")
-        print("Transaction Receipt:")
-        print(json.dumps(serialize_web3_object(receipt), indent=2))
-
-        st.success(f"Log added to blockchain. Transaction Hash: {tx_hash.hex()}")
-
-        # Fetch events using get_logs
-        event_filter = {
-            'fromBlock': receipt.blockNumber,
-            'toBlock': receipt.blockNumber,
-            'address': contract.address
-        }
-        logs = web3.eth.get_logs(event_filter)
         
-        events = [contract.events.LogCreated().process_log(log) for log in logs]
-
-        if events:
-            for event in events:
-                serialized_event = serialize_web3_object(event)
-                print("Event emitted:")
-                print(json.dumps(serialized_event, indent=2))
-                st.info("Event emitted:")
-                st.json(serialized_event)
-        else:
-            print("No events were emitted.")
-            st.warning("No events were emitted.")
+        st.success(f"Log added to blockchain. Transaction Hash: {tx_hash.hex()}")
+        
+        # Display Transaction Receipt
+        st.subheader("Transaction Receipt")
+        
+        # Create columns for better layout
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric("Block Number", receipt.blockNumber)
+            st.metric("Gas Used", receipt.gasUsed)
+            st.metric("Status", "Success" if receipt.status == 1 else "Failed")
+        
+        with col2:
+            st.metric("Transaction Index", receipt.transactionIndex)
+            st.metric("Cumulative Gas Used", receipt.cumulativeGasUsed)
+            st.metric("Effective Gas Price", receipt.effectiveGasPrice)
+        
+        # Display more detailed information in an expander
+        with st.expander("Detailed Transaction Information"):
+            st.json({
+                "transactionHash": receipt.transactionHash.hex(),
+                "blockHash": receipt.blockHash.hex(),
+                "from": receipt["from"],
+                "to": receipt.to,
+                "contractAddress": receipt.contractAddress,
+                "logs": [serialize_log(log) for log in receipt.logs],
+                "logsBloom": receipt.logsBloom.hex()
+            })
 
     except Exception as e:
         error_message = f"Error adding log to blockchain: {e}"
         print(error_message)
         st.error(error_message)
         raise
+
+def serialize_log(log):
+    return {
+        "address": log.address,
+        "topics": [topic.hex() for topic in log.topics],
+        "data": log.data.hex(),
+        "blockNumber": log.blockNumber,
+        "transactionHash": log.transactionHash.hex(),
+        "transactionIndex": log.transactionIndex,
+        "blockHash": log.blockHash.hex(),
+        "logIndex": log.logIndex
+    }
     
 def format_log_entry(entry):
     # Extract timestamp, method, and hash using regex
@@ -628,6 +647,8 @@ db = firebase.database()
 
 
 def main():
+    
+    
     st.title("RE-DACT")
     st.text("Enhanced Data Protection Tool")
     st.text("Built with Streamlit and spaCy")
@@ -682,6 +703,8 @@ def main():
 
     if st.session_state['user']:
         
+        
+        
         activities = [
             "Data Protection",
             "Entity Analysis",
@@ -693,8 +716,55 @@ def main():
         choice = st.sidebar.selectbox("Select Task", activities)
 
         if choice == "Data Protection":
+            image_path = ".//one.jpg"  # Update this path to the correct location of your image
+            if os.path.exists(image_path):
+                try:
+                    img = Image.open(image_path)
+                    st.image(img, use_column_width=True)
+                except Exception as e:
+                    st.error(f"Error loading image: {e}")
+            else:
+                st.warning("Image file not found. Continuing without the image.")   
+    
+        if choice == "Data Protection":
+            image_path = ".//two.jpg"  # Update this path to the correct location of your image
+            if os.path.exists(image_path):
+                try:
+                    img = Image.open(image_path)
+                    st.image(img, use_column_width=True)
+                except Exception as e:
+                    st.error(f"Error loading image: {e}")
+            else:
+                st.warning("Image file not found. Continuing without the image.")   
+        
+        if choice == "Data Protection":
+            image_path = ".//three.jpg"  # Update this path to the correct location of your image
+            if os.path.exists(image_path):
+                try:
+                    img = Image.open(image_path)
+                    st.image(img, use_column_width=True)
+                except Exception as e:
+                    st.error(f"Error loading image: {e}")
+            else:
+                st.warning("Image file not found. Continuing without the image.") 
+                
+        if choice == "Data Protection":
+            image_path = ".//four.jpg"  # Update this path to the correct location of your image
+            if os.path.exists(image_path):
+                try:
+                    img = Image.open(image_path)
+                    st.image(img, use_column_width=True)
+                except Exception as e:
+                    st.error(f"Error loading image: {e}")
+            else:
+                st.warning("Image file not found. Continuing without the image.")    
+            
+            
+            
             st.subheader("Data Protection Options")
 
+            
+            
             uploaded_file = st.file_uploader("Choose a file", type=["txt", "csv", "pdf", "docx", "pptx"])
             if uploaded_file is not None:
                 file_type = uploaded_file.type
