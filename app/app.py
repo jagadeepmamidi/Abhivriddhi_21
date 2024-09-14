@@ -1,3 +1,5 @@
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 from cryptography.fernet import Fernet
 from typing import Union
 from web3.datastructures import AttributeDict
@@ -24,25 +26,92 @@ from pptx import Presentation
 import io
 import pyrebase
 
+def redact_personal_info(text, use_spacy=False, domain='general'):
+    """
+    Redacts sensitive information based on the chosen method (regex or spaCy) and domain.
+    
+    Args:
+    text (str): The input text containing sensitive information.
+    use_spacy (bool): Whether to use spaCy for redaction (if False, use regex).
+    domain (str): The domain for which to apply specific redaction patterns.
+    
+    Returns:
+    str: The redacted text.
+    """
+    
+    # Domain-specific patterns
+    domain_patterns = {
+        'general': {
+            'bank_account': r'\b\d{10,16}\b',
+            'credit_card': r'\b(?:\d[ -]*?){13,16}\b',
+            'tin': r'\b\d{3}-\d{2}-\d{4}\b',
+            'salary_info': r'\b(\$|\₹)?\d{1,3}(,\d{3})*(\.\d{2})?\b',
+            'ssn': r'\b\d{3}-\d{2}-\d{4}\b',
+            'passport_number': r'\b[A-Z0-9]{6,9}\b',
+            'driving_license': r'\b[A-Z0-9]{8,12}\b',
+            'birthdate': r'\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b',
+            'national_id': r'\b\d{9,12}\b'
+        },
+        'financial': {
+            'amount': r'\b(\$|£|€|₹)?\d{1,3}(?:,\d{3})*(?:\.\d{2})?\b',
+            'credit_card': r'\b(?:\d[ -]*?){13,16}\b',
+            'bank_account': r'\b\d{10,16}\b',
+            'transaction_id': r'\b[Tt][Aa][Xx][Nn][Uu][Mm][Bb][Ee][Rr]-\d{8}\b'
+        },
+        'personal': {
+            'phone_number': r'\b(?:\+?(\d{1,3}))?[-.●]?\(?(?:\d{1,4})\)?[-.●]?\d{1,4}[-.●]?\d{1,4}[-.●]?\d{1,9}\b',
+            'email': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+            'date': r'\b(?:\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\b\w+\s\d{1,2},?\s\d{4})\b',
+            'username': r'\b(username|user|login):\s*[A-Za-z0-9._%+-]+\b',
+            'password': r'\b(password|pwd|pass):\s*\S+\b'
+        },
+        'health': {
+            'medical_record': r'\bMR-\d{6,8}\b',
+            'patient_id': r'\bPID-\d{6,10}\b',
+            'insurance_policy': r'\bINS-\d{8,12}\b'
+        }
+    }
+
+    # Select patterns based on the domain
+    patterns = domain_patterns.get(domain, domain_patterns['general'])
+
+    if not use_spacy:
+        # Regex-based redaction
+        for label, pattern in patterns.items():
+            text = re.sub(pattern, '[REDACTED]', text)
+
+    else:
+        # spaCy-based redaction
+        doc = nlp(text)
+        for ent in doc.ents:
+            if ent.label_ in ["PERSON", "GPE", "ORG", "LAW", "LOC", "MONEY", "CARDINAL", "DATE", "TIME"]:
+                text = text.replace(ent.text, '[REDACTED]')
+    
+    return text
 
 
+def process_docx(file) -> str:
+    doc = Document(io.BytesIO(file.read()))
+    text = ""
+    for paragraph in doc.paragraphs:
+        text += paragraph.text + "\n"
+    return text
 
-
-def extract_text_from_docx(file): # extracting file from document
+def extract_text_from_docx(file):
     doc = Document(io.BytesIO(file))
     text = ""
     for para in doc.paragraphs:
         text += para.text + "\n"
     return text
 
-def extract_text_from_pdf(file): # file extraction from pdf
+def extract_text_from_pdf(file):
     pdf_document = fitz.open(stream=file, filetype="pdf")
     text = ""
     for page in pdf_document:
         text += page.get_text()
     return text
 
-def extract_text_from_pptx(file): # file extraction from ppt
+def extract_text_from_pptx(file):
     ppt = Presentation(io.BytesIO(file))
     text = ""
     for slide in ppt.slides:
@@ -51,14 +120,7 @@ def extract_text_from_pptx(file): # file extraction from ppt
                 text += shape.text + "\n"
     return text
 
-def process_docx(file) -> str: # processing document 
-    doc = Document(io.BytesIO(file.read()))
-    text = ""
-    for paragraph in doc.paragraphs:
-        text += paragraph.text + "\n"
-    return text
-
-def process_pptx(file) -> str: # processing ppt 
+def process_pptx(file) -> str:
     presentation = Presentation(io.BytesIO(file.read()))
     text = ""
     for slide in presentation.slides:
@@ -67,7 +129,7 @@ def process_pptx(file) -> str: # processing ppt
                 text += shape.text + "\n"
     return text
 
-def process_pdf(file) -> str: # processing pdf 
+def process_pdf(file) -> str:
     # Open the PDF file
     pdf_document = fitz.open(stream=file.read(), filetype="pdf")
     
@@ -78,34 +140,6 @@ def process_pdf(file) -> str: # processing pdf
         text += page.get_text()
     
     return text
-
-def process_file(file): # processing file
-    file_extension = os.path.splitext(file.name)[1].lower()
-    if file_extension == ".txt":
-        return file.read().decode("utf-8")
-    elif file_extension == ".pdf":
-        return process_pdf(file)
-    elif file_extension == ".docx":
-        return process_docx(file)
-    elif file_extension == ".pptx":
-        return process_pptx(file)
-    else:
-        raise ValueError("Unsupported file format")
-
-# processing text 
-def process_text(user_id, text, protection_method, entity_types, custom_words, redaction_level=None, use_encryption=False):
-    if protection_method == "Data Redaction":
-        result, modifications, encryption_key = redact_or_encrypt_entities(text, entity_types, custom_words, redaction_level, use_encryption)
-    elif protection_method == "Data Masking":
-        result = mask_data(text, entity_types, custom_words)
-        encryption_key = None
-    else:  # Data Anonymization
-        result = anonymize_data(text, entity_types, custom_words)
-        encryption_key = None
-
-    log_protection_activity(user_id, text, result, protection_method, redaction_level, use_encryption)
-
-    return result, encryption_key
 
 
 
@@ -138,13 +172,26 @@ web3.eth.default_account = web3.eth.accounts[0]
 
 import os
 
+def process_file(file):
+    file_extension = os.path.splitext(file.name)[1].lower()
+    if file_extension == ".txt":
+        return file.read().decode("utf-8")
+    elif file_extension == ".pdf":
+        return process_pdf(file)
+    elif file_extension == ".docx":
+        return process_docx(file)
+    elif file_extension == ".pptx":
+        return process_pptx(file)
+    else:
+        raise ValueError("Unsupported file format")
 
 
 
 
 
 
-def get_audit_logs(): # get audit logs from blockchain
+
+def get_audit_logs():
     """
     Retrieve all audit logs from the blockchain.
     """
@@ -158,7 +205,7 @@ def get_audit_logs(): # get audit logs from blockchain
         print(f"Error retrieving logs: {e}")
 
 
-def serialize_web3_object(obj): # serialize web3 objects
+def serialize_web3_object(obj):
     if isinstance(obj, AttributeDict):
         return {k: serialize_web3_object(v) for k, v in obj.items()}
     if isinstance(obj, (bytes, bytearray)):
@@ -167,7 +214,6 @@ def serialize_web3_object(obj): # serialize web3 objects
         return obj
     return str(obj)
 
-# add audit logs 
 def add_audit_log(user_id: str, data_hash: str, action: str, timestamp: str, use_encryption: bool = False):
     try:
         # Include use_encryption in the log data
@@ -206,8 +252,7 @@ def add_audit_log(user_id: str, data_hash: str, action: str, timestamp: str, use
         print(error_message)
         st.error(error_message)
         raise
-
-# long entry formatting    
+    
 def format_log_entry(entry):
     # Extract timestamp, method, and hash using regex
     timestamp_match = re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}", entry)
@@ -227,18 +272,19 @@ def format_log_entry(entry):
     </div>
     """
 
-# defining has data 
+
 def hash_data(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
-# defining log protection activity
+
 def log_protection_activity(
     user_id: str,
     original_text: str, 
     processed_text: str, 
     protection_method: str, 
     redaction_level: str = None, 
-    use_encryption: bool = False
+    use_encryption: bool = False,
+    domain: str = None
 ):
     timestamp = datetime.now().isoformat()
     redacted_amount = len(original_text) - len(processed_text)
@@ -251,7 +297,8 @@ def log_protection_activity(
         f"Redacted: {redacted_amount} chars | "
         f"Hash: {data_hash} | "
         f"Redaction Level: {redaction_level if redaction_level else 'N/A'} | "
-        f"Encryption Used: {'Yes' if use_encryption else 'No'}"
+        f"Encryption Used: {'Yes' if use_encryption else 'No'} | "
+        f"Domain: {domain if domain else 'N/A'}"
     )
 
     # Log to file
@@ -265,7 +312,27 @@ def log_protection_activity(
         logging.error(f"Error adding log to blockchain: {e}")
 
 
+def process_text(user_id, text, protection_method, entity_types, custom_words, redaction_level=None, use_encryption=False, domain=None, use_spacy=False):
+    original_text = text
+    if protection_method == "Data Redaction":
+        redacted_text, modifications = redact_entities(text, entity_types, custom_words, redaction_level)
+        key = generate_key()
+        encrypted_original = encrypt_full_text(original_text, key)
+    elif protection_method == "Data Masking":
+        result = mask_data(text, entity_types, custom_words)
+        encryption_key = None
+    elif protection_method == "Data Anonymization":
+        result = anonymize_data(text, entity_types, custom_words)
+        encryption_key = None
+    elif protection_method == "Domain-Specific Redaction":
+        result = redact_personal_info(text, use_spacy=use_spacy, domain=domain)
+        encryption_key = None
+    else:
+        raise ValueError("Invalid protection method")
 
+    log_protection_activity(user_id, original_text, result, protection_method, redaction_level, domain=domain)
+
+    return result, encryption_key, encrypted_original if encryption_key else None
 
 
 
@@ -278,7 +345,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 undo_stack = []
 redo_stack = []
 
-# adding email matcher 
+
 def add_email_matcher(nlp):
     email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
     matcher = spacy.matcher.Matcher(nlp.vocab)
@@ -295,54 +362,28 @@ def load_nlp_model():
 
 nlp, email_matcher = load_nlp_model()
 
-# generating key
 def generate_key():
     return Fernet.generate_key()
 
-# entity encryption 
-def encrypt_entity(entity: str, key: bytes) -> str:
+def encrypt_full_text(text: str, key: bytes) -> str:
     f = Fernet(key)
-    encrypted = f.encrypt(entity.encode())
-    return base64.urlsafe_b64encode(encrypted).decode()
+    return f.encrypt(text.encode()).decode()
 
-# entity decryption 
-def decrypt_entity(encrypted_entity: str, key: bytes) -> str:
+def decrypt_full_text(encrypted_text: str, key: bytes) -> str:
     f = Fernet(key)
-    decoded = base64.urlsafe_b64decode(encrypted_entity)
-    return f.decrypt(decoded).decode()
+    return f.decrypt(encrypted_text.encode()).decode()
 
-# text decryption
-def decrypt_text(text: str, key: bytes) -> str:
-    def decrypt_match(match):
-        try:
-            encrypted = match.group(0)
-            return decrypt_entity(encrypted, key)
-        except:
-            return match.group(0)  # Return original if decryption fails
-
-    # Use regex to find and decrypt all base64-encoded strings
-    decrypted_text = re.sub(r'[A-Za-z0-9_-]{50,}={0,2}', decrypt_match, text)
-    return decrypted_text
-
-# redaction or encrypting entities
-def redact_or_encrypt_entities(text: str, entity_types: List[str], custom_words: Optional[List[str]] = None, redaction_level: str = "Low", use_encryption: bool = False) -> Tuple[str, List[Tuple[int, int, str, str]], Optional[bytes]]:
+def redact_entities(text: str, entity_types: List[str], custom_words: Optional[List[str]] = None, redaction_level: str = "Low") -> Tuple[str, List[Tuple[int, int, str, str]]]:
     doc = nlp(text)
     modifications = []
-    key = None
-
-    if use_encryption:
-        key = generate_key()
 
     def modify_entity(word: str) -> str:
-        if use_encryption:
-            return encrypt_entity(word, key)
+        if redaction_level == "High":
+            return "[Redacted]"
+        elif redaction_level == "Medium":
+            return f"[Redacted:{len(word)}]"
         else:
-            if redaction_level == "High":
-                return "[REDACTED]"
-            elif redaction_level == "Medium":
-                return word[:len(word)//2] + "x" * (len(word) - len(word)//2)
-            else:
-                return f"{word[:len(word)//2]}-xxxx"
+            return f"[Redacted:{word[:2]}...]"
 
     # Process custom words
     if custom_words:
@@ -369,9 +410,9 @@ def redact_or_encrypt_entities(text: str, entity_types: List[str], custom_words:
     for start, end, replacement, label in modifications:
         text = text[:start] + replacement + text[end:]
 
-    return text, modifications, key
+    return text, modifications
 
-# generating fake data
+
 def generate_fake_data(entity_type: str) -> str:
     if entity_type == "PERSON":
         return "John Doe"
@@ -386,7 +427,7 @@ def generate_fake_data(entity_type: str) -> str:
     else:
         return "".join(random.choices(string.ascii_letters + string.digits, k=10))
 
-# masking generated data
+
 def mask_data(
     text: str, entity_types: List[str], custom_words: Optional[List[str]] = None
 ) -> str:
@@ -417,14 +458,14 @@ def mask_data(
 
     return masked_text
 
-# anonymizing data 
+
 def anonymize_data(
     text: str, entity_types: List[str], custom_words: Optional[List[str]] = None
 ) -> str:
     doc = nlp(text)
     anonymized_text = text
 
-    def generate_anonymous_id() -> str: # generating anonymous ID 
+    def generate_anonymous_id() -> str:
         return "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
     if custom_words:
@@ -458,7 +499,7 @@ def anonymize_data(
 
     return anonymized_text
 
-# getting entity counts
+
 def get_entity_counts(text: str) -> Dict[str, int]:
     doc = nlp(text)
     entity_counts = {}
@@ -470,7 +511,7 @@ def get_entity_counts(text: str) -> Dict[str, int]:
 
     return entity_counts
 
-# obtain download link 
+
 def get_download_link(text, file_name, link_text="Download"):
     # Create a BytesIO object to hold the text data
     buffer = io.BytesIO()
@@ -489,7 +530,7 @@ def get_download_link(text, file_name, link_text="Download"):
     return href
 
 
-# saving downloaded history
+
 def save_download_history(filename: str):
     try:
         history = []
@@ -506,7 +547,7 @@ def save_download_history(filename: str):
         logging.error(f"Error saving download history: {e}")
         st.error(f"Error saving download history: {e}")
 
-# getting downloaded history 
+
 def get_download_history() -> List[Dict[str, str]]:
     if os.path.exists(DOWNLOAD_HISTORY_FILE):
         try:
@@ -517,7 +558,7 @@ def get_download_history() -> List[Dict[str, str]]:
             st.error(f"Error retrieving download history: {e}")
     return []
 
-# cleaning up old files 
+
 def cleanup_old_files():
     try:
         current_time = datetime.now()
@@ -658,48 +699,54 @@ def main():
             )
 
             protection_method = st.radio(
-            "Select Protection Method",
-            ("Data Redaction", "Data Masking", "Data Anonymization"),
-        )
-            
+        "Select Protection Method",
+        ("Data Redaction", "Data Masking", "Data Anonymization", "Domain-Specific Redaction"),
+    )
+    
             redaction_level = None
             use_encryption = False
+            domain = None
+            use_spacy = False
 
             if protection_method == "Data Redaction":
                 redaction_level = st.radio(
                     "Select Redaction Level", ("High", "Medium", "Low")
                 )
-                use_encryption = st.checkbox("Use Encryption Instead of Redaction")
-
+            elif protection_method == "Domain-Specific Redaction":
+                domain = st.selectbox("Select the domain for redaction:", options=['general', 'financial', 'personal', 'health'])
+                use_spacy = st.checkbox("Use spaCy for redaction (otherwise regex will be used)", value=False)
+            
+            
                 if st.button("Process"):
-                        if not rawtext or rawtext == "Type Here":
-                            st.error("Please enter some text to protect or upload a file.")
-                        elif not entity_types and not custom_word_list:
-                            st.error("Please select at least one entity type to protect or enter custom words.")
-                        else:
-                            with st.spinner("Processing text..."):
-                                original_text = rawtext
-                                user_id = st.session_state['user']['localId']
-                                result, encryption_key = process_text(
-                                    user_id,
-                                    rawtext, 
-                                    protection_method, 
-                                    entity_types, 
-                                    custom_word_list, 
-                                    redaction_level, 
-                                    use_encryption if protection_method == "Data Redaction" else False
-                                )
+                    if not rawtext or rawtext == "Type Here":
+                        st.error("Please enter some text to protect or upload a file.")
+                    elif not entity_types and not custom_word_list:
+                        st.error("Please select at least one entity type to protect or enter custom words.")
+                    else:
+                        with st.spinner("Processing text..."):
+                            user_id = st.session_state['user']['localId']
+                            result, key, encrypted_original = process_text(
+                                user_id,
+                                rawtext, 
+                                protection_method, 
+                                entity_types, 
+                                custom_word_list, 
+                                redaction_level
+                            )
 
                         # Log to blockchain
                         data_hash = hash_data(result)
                         timestamp = datetime.now().isoformat()
-                        add_audit_log(user_id, data_hash, protection_method, timestamp, use_encryption if protection_method == "Data Redaction" else False)
+                        add_audit_log(user_id, data_hash, protection_method, timestamp, True)
+                        
                         st.write("Processed Text:")
                         st.write(result)
 
-                        if encryption_key:
-                            st.write("Encryption Key (save this to decrypt later):")
-                            st.code(encryption_key.decode())
+                        st.write("Encryption Key (save this to decrypt later):")
+                        st.code(key)
+
+                        st.write("Encrypted Original (store this securely):")
+                        st.code(encrypted_original)
 
                         filename = f"{protection_method.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
                         st.markdown(
@@ -716,7 +763,7 @@ def main():
 
             if st.button("Decrypt"):
                 try:
-                    decrypted_text = decrypt_text(encrypted_text, encryption_key.encode())
+                    decrypted_text = decrypt_full_text(encrypted_text, encryption_key.encode())
                     st.write("Decrypted Text:")
                     st.text_area("Result", decrypted_text, height=300)
                 except Exception as e:
@@ -812,11 +859,6 @@ def main():
             st.write("- Download history and re-download of previous files")
             st.write("- File upload support")
             st.write("- Email detection and protection")
-
-        if st.sidebar.button("Logout"):
-            st.session_state['user'] = None
-            st.success("Logged out successfully!")
-            
 
     # Run cleanup job
     cleanup_old_files()         
