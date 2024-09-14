@@ -25,6 +25,36 @@ from docx import Document
 from pptx import Presentation
 import io
 import pyrebase
+import easyocr
+from PIL import Image, ImageDraw
+
+SENSITIVE_PATTERNS = {
+        'email': r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+        'name': r'\b[A-Z][a-z]+\b',  # Simple pattern for names (first letter capitalized)
+        'address': r'\d{1,5}\s\w+(\s\w+){1,3}',  # Simple pattern for addresses
+        'card_number': r'\b\d{4}(-\d{4}){3}\b',  # Simple pattern for card numbers (XXXX-XXXX-XXXX-XXXX)
+        'organization': r'\b[A-Z][a-zA-Z\s]+(?:Inc|LLC|Ltd|Corp|Co)\b',  # Pattern for organization names
+    }
+
+def mask_sensitive_data(image, patterns):
+    reader = easyocr.Reader(['en'])
+    results = reader.readtext(image)
+    
+    img = Image.open(io.BytesIO(image))
+    draw = ImageDraw.Draw(img)
+    
+    # Check and mask sensitive data based on patterns
+    for result in results:
+        text = result[1]
+        box = result[0]
+        # Convert the box coordinates to integers
+        box = [(int(x), int(y)) for (x, y) in box]
+        for key, pattern in patterns.items():
+            if re.search(pattern, text, re.IGNORECASE):
+                draw.polygon(box, fill='black')
+                break  # Masking once per detected box
+
+    return img
 
 def redact_personal_info(text, use_spacy=False, domain='general'):
     """
@@ -314,25 +344,27 @@ def log_protection_activity(
 
 def process_text(user_id, text, protection_method, entity_types, custom_words, redaction_level=None, use_encryption=False, domain=None, use_spacy=False):
     original_text = text
+    key = None
+    encrypted_original = None
+    
     if protection_method == "Data Redaction":
-        redacted_text, modifications = redact_entities(text, entity_types, custom_words, redaction_level)
-        key = generate_key()
-        encrypted_original = encrypt_full_text(original_text, key)
+        result, modifications = redact_entities(text, entity_types, custom_words, redaction_level)
     elif protection_method == "Data Masking":
         result = mask_data(text, entity_types, custom_words)
-        encryption_key = None
     elif protection_method == "Data Anonymization":
         result = anonymize_data(text, entity_types, custom_words)
-        encryption_key = None
     elif protection_method == "Domain-Specific Redaction":
         result = redact_personal_info(text, use_spacy=use_spacy, domain=domain)
-        encryption_key = None
     else:
         raise ValueError("Invalid protection method")
 
-    log_protection_activity(user_id, original_text, result, protection_method, redaction_level, domain=domain)
+    if use_encryption:
+        key = generate_key()
+        encrypted_original = encrypt_full_text(original_text, key)
 
-    return result, encryption_key, encrypted_original if encryption_key else None
+    log_protection_activity(user_id, original_text, result, protection_method, redaction_level, use_encryption=use_encryption, domain=domain)
+
+    return result, key, encrypted_original
 
 
 
@@ -698,6 +730,33 @@ def main():
                 else None
             )
 
+            st.title("Sensitive Data Masking")
+
+            uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+            if uploaded_file is not None:
+                # Load the uploaded image file
+                image = uploaded_file.read()
+
+                # Mask sensitive data in the image
+                masked_image = mask_sensitive_data(image, SENSITIVE_PATTERNS)
+
+                # Display the masked image
+                st.image(masked_image, caption='Processed Image', use_column_width=True)
+
+                # Convert the masked image to a format suitable for download
+                img_byte_arr = io.BytesIO()
+                masked_image.save(img_byte_arr, format='PNG')
+                img_byte_arr.seek(0)
+
+                # Create a download button for the redacted image
+                st.download_button(
+                    label="Download Redacted Image",
+                    data=img_byte_arr,
+                    file_name="redacted_image.png",
+                    mime="image/png"
+                )
+            
             protection_method = st.radio(
         "Select Protection Method",
         ("Data Redaction", "Data Masking", "Data Anonymization", "Domain-Specific Redaction"),
@@ -716,45 +775,50 @@ def main():
                 domain = st.selectbox("Select the domain for redaction:", options=['general', 'financial', 'personal', 'health'])
                 use_spacy = st.checkbox("Use spaCy for redaction (otherwise regex will be used)", value=False)
             
-            
-                if st.button("Process"):
-                    if not rawtext or rawtext == "Type Here":
-                        st.error("Please enter some text to protect or upload a file.")
-                    elif not entity_types and not custom_word_list:
-                        st.error("Please select at least one entity type to protect or enter custom words.")
-                    else:
-                        with st.spinner("Processing text..."):
-                            user_id = st.session_state['user']['localId']
-                            result, key, encrypted_original = process_text(
-                                user_id,
-                                rawtext, 
-                                protection_method, 
-                                entity_types, 
-                                custom_word_list, 
-                                redaction_level
-                            )
+            use_encryption = st.checkbox("Use encryption", value=False)
 
-                        # Log to blockchain
-                        data_hash = hash_data(result)
-                        timestamp = datetime.now().isoformat()
-                        add_audit_log(user_id, data_hash, protection_method, timestamp, True)
-                        
-                        st.write("Processed Text:")
-                        st.write(result)
+            if st.button("Process"):
+                if not rawtext or rawtext == "Type Here":
+                    st.error("Please enter some text to protect or upload a file.")
+                elif not entity_types and not custom_word_list:
+                    st.error("Please select at least one entity type to protect or enter custom words.")
+                else:
+                    with st.spinner("Processing text..."):
+                        user_id = st.session_state['user']['localId']
+                        result, key, encrypted_original = process_text(
+                            user_id,
+                            rawtext, 
+                            protection_method, 
+                            entity_types, 
+                            custom_word_list, 
+                            redaction_level,
+                            use_encryption,
+                            domain,
+                            use_spacy
+                        )
 
+                    # Log to blockchain
+                    data_hash = hash_data(result)
+                    timestamp = datetime.now().isoformat()
+                    add_audit_log(user_id, data_hash, protection_method, timestamp, use_encryption)
+                    
+                    st.write("Processed Text:")
+                    st.write(result)
+
+                    if use_encryption and key and encrypted_original:
                         st.write("Encryption Key (save this to decrypt later):")
                         st.code(key)
 
                         st.write("Encrypted Original (store this securely):")
                         st.code(encrypted_original)
 
-                        filename = f"{protection_method.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-                        st.markdown(
-                            get_download_link(result, filename, f"Download {protection_method} Text"),
-                            unsafe_allow_html=True,
-                        )
+                    filename = f"{protection_method.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                    st.markdown(
+                        get_download_link(result, filename, f"Download {protection_method} Text"),
+                        unsafe_allow_html=True,
+                    )
 
-                        save_download_history(filename)
+                    save_download_history(filename)
 
         elif choice == "Decrypt Text":
             st.subheader("Decrypt Text")
