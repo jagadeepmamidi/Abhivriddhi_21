@@ -996,7 +996,5 @@ def main():
 
     # Run cleanup job
     cleanup_old_files()         
-
-
 if __name__ == "__main__":
     main()
