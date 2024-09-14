@@ -726,38 +726,60 @@ def main():
             else:
                 st.warning("Image file not found. Continuing without the image.")   
     
+           
+        
         if choice == "Data Protection":
             image_path = ".//two.jpg"  # Update this path to the correct location of your image
             if os.path.exists(image_path):
                 try:
+                    # Open the image
                     img = Image.open(image_path)
-                    st.image(img, use_column_width=True)
+                    
+                    # Resize the image (for example, to 400x300 pixels)
+                    img = img.resize((500, 300))  # Adjust the size as needed
+                    
+                    # Display the resized image
+                    st.image(img, use_column_width=False)
                 except Exception as e:
                     st.error(f"Error loading image: {e}")
             else:
-                st.warning("Image file not found. Continuing without the image.")   
-        
+                st.warning("Image file not found. Continuing without the image.")
+                
         if choice == "Data Protection":
             image_path = ".//three.jpg"  # Update this path to the correct location of your image
             if os.path.exists(image_path):
                 try:
+                    # Open the image
                     img = Image.open(image_path)
-                    st.image(img, use_column_width=True)
+                    
+                    # Resize the image (for example, to 400x300 pixels)
+                    img = img.resize((500, 300))  # Adjust the size as needed
+                    
+                    # Display the resized image
+                    st.image(img, use_column_width=False)
                 except Exception as e:
                     st.error(f"Error loading image: {e}")
             else:
-                st.warning("Image file not found. Continuing without the image.") 
+                st.warning("Image file not found. Continuing without the image.")
                 
+        
+        
         if choice == "Data Protection":
             image_path = ".//four.jpg"  # Update this path to the correct location of your image
             if os.path.exists(image_path):
                 try:
+                    # Open the image
                     img = Image.open(image_path)
-                    st.image(img, use_column_width=True)
+                    
+                    # Resize the image (for example, to 400x300 pixels)
+                    img = img.resize((500, 300))  # Adjust the size as needed
+                    
+                    # Display the resized image
+                    st.image(img, use_column_width=False)
                 except Exception as e:
                     st.error(f"Error loading image: {e}")
             else:
-                st.warning("Image file not found. Continuing without the image.")    
+                st.warning("Image file not found. Continuing without the image.")   
             
             
             
@@ -996,5 +1018,7 @@ def main():
 
     # Run cleanup job
     cleanup_old_files()         
+
+
 if __name__ == "__main__":
     main()
