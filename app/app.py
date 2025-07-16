@@ -249,7 +249,8 @@ def serialize_web3_object(obj):
 def add_audit_log(user_id: str, data_hash: str, action: str, timestamp: str, use_encryption: bool = False):
     try:
         # Include use_encryption in the log data
-        tx_hash = contract.functions.addLog(user_id, data_hash, f"{action} (Encrypted: {use_encryption})", timestamp).transact()
+        #tx_hash = contract.functions.addLog(user_id, data_hash, f"{action} (Encrypted: {use_encryption})", timestamp).transact()
+        tx_hash = contract.functions.addLog(user_id, data_hash, f"{action} (Encrypted: {use_encryption})").transact()
         receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
 
         print(f"Log added to blockchain. Transaction Hash: {tx_hash.hex()}")
@@ -715,52 +716,7 @@ def main():
         ]
         choice = st.sidebar.selectbox("Select Task", activities)
 
-        if choice == "Data Protection":
-            image_path = ".//one.jpg"  # Update this path to the correct location of your image
-            if os.path.exists(image_path):
-                try:
-                    img = Image.open(image_path)
-                    st.image(img, use_column_width=True)
-                except Exception as e:
-                    st.error(f"Error loading image: {e}")
-            else:
-                st.warning("Image file not found. Continuing without the image.")   
-    
-           
-        
-        if choice == "Data Protection":
-            image_path = ".//two.jpg"  # Update this path to the correct location of your image
-            if os.path.exists(image_path):
-                try:
-                    # Open the image
-                    img = Image.open(image_path)
-                    
-                    # Resize the image (for example, to 400x300 pixels)
-                    img = img.resize((500, 300))  # Adjust the size as needed
-                    
-                    # Display the resized image
-                    st.image(img, use_column_width=False)
-                except Exception as e:
-                    st.error(f"Error loading image: {e}")
-            else:
-                st.warning("Image file not found. Continuing without the image.")
-                
-        if choice == "Data Protection":
-            image_path = ".//three.jpg"  # Update this path to the correct location of your image
-            if os.path.exists(image_path):
-                try:
-                    # Open the image
-                    img = Image.open(image_path)
-                    
-                    # Resize the image (for example, to 400x300 pixels)
-                    img = img.resize((500, 300))  # Adjust the size as needed
-                    
-                    # Display the resized image
-                    st.image(img, use_column_width=False)
-                except Exception as e:
-                    st.error(f"Error loading image: {e}")
-            else:
-                st.warning("Image file not found. Continuing without the image.")
+     
                 
         
         
@@ -779,7 +735,7 @@ def main():
                 except Exception as e:
                     st.error(f"Error loading image: {e}")
             else:
-                st.warning("Image file not found. Continuing without the image.")   
+                st.warning("Welcome to RE-DACT!.")   
             
             
             

@@ -1,0 +1,11 @@
+cryptography
+web3
+pydantic==1.10.13
+PyMuPDF
+python-docx
+python-pptx
+pyrebase4
+easyocr
+Pillow
+streamlit
+spacy
