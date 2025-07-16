@@ -8,4 +8,4 @@ pyrebase4
 easyocr
 Pillow
 streamlit
-spacy
+spacy==3.4.4
