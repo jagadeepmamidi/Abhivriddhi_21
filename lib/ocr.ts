@@ -11,7 +11,7 @@ export type ImageRedactResult = {
 export async function redactImageBuffer(buffer: Buffer): Promise<ImageRedactResult> {
   const worker = await createWorker("eng");
   try {
-    const { data } = await worker.recognize(buffer);
+    const { data } = await worker.recognize(buffer, {}, { blocks: true, text: true });
     const image = sharp(buffer);
     const meta = await image.metadata();
     const width = meta.width ?? 0;
