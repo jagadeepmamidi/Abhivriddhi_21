@@ -13,6 +13,17 @@ describe("protectText", () => {
     "Northwind Labs billed $12,400.00 on 04/18/2024.",
   ].join(" ");
 
+  it("redacts two-word person names", () => {
+    const result = protectText("From: Priya Shah <priya.shah@northwind.test>", {
+      method: "redaction",
+      entityTypes: ["PERSON", "EMAIL"],
+      redactionLevel: "high",
+      useNer: false,
+    });
+    expect(result.processed).not.toContain("Priya Shah");
+    expect(result.processed).not.toContain("priya.shah@northwind.test");
+  });
+
   it("redacts emails, phones, SSNs, and cards", () => {
     const result = protectText(sample, {
       method: "redaction",

@@ -166,6 +166,9 @@ export function detectSpans(text: string, options: ProtectOptions): DetectedSpan
     }
   } else {
     if (types.has("EMAIL")) pushRegexSpans(text, EMAIL_RE, "EMAIL", spans);
+    if (types.has("PERSON")) {
+      pushRegexSpans(text, /\b[A-Z][a-z]{2,}\s[A-Z][a-z]{2,}\b/g, "PERSON", spans);
+    }
     if (types.has("SSN")) pushRegexSpans(text, SSN_RE, "SSN", spans);
     if (types.has("PHONE")) pushRegexSpans(text, PHONE_RE, "PHONE", spans);
     if (types.has("CREDIT_CARD")) pushRegexSpans(text, CARD_RE, "CREDIT_CARD", spans);
