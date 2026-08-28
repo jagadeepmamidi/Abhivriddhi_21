@@ -29,15 +29,34 @@ Open [http://localhost:3000](http://localhost:3000). Demo login: `demo@redact.ap
 
 `npm start` binds `0.0.0.0` and honors `PORT`, which is what Render expects.
 
-## Deploy on Render
+## Deploy on Render (free)
 
-1. Push this repo.
-2. Use the Blueprint in `render.yaml`, or create a Node web service:
-   - Build: `npm ci && npm run build`
-   - Start: `npm start`
-   - Health check: `/api/health`
-3. Set `SESSION_SECRET` to a long random string.
-4. Attach a disk at `/var/data` and set `DATA_DIR=/var/data` so the SQLite ledger survives deploys. On the free web plan the disk is unavailable and data resets on restart.
+Render's Free web plan is $0. The site is public at `https://<name>.onrender.com`.
+
+Free-plan limits:
+- The service sleeps after 15 minutes with no traffic. The next visit takes about a minute to wake.
+- No persistent disk. SQLite (accounts, history, audit chain) resets when the service sleeps, restarts, or redeploys. The demo login still works because it is recreated on boot.
+- 512 MB RAM / 0.1 CPU.
+
+### Dashboard (easiest)
+
+1. Open [New Web Service](https://dashboard.render.com/web/new) and connect `jagadeepmamidi/Abhivriddhi_21`.
+2. Branch: `main`. Runtime: Node.
+3. Build: `npm ci && npm run build`
+4. Start: `npm start`
+5. Instance type: **Free** (not Starter).
+6. Environment:
+   - `SESSION_SECRET` = a random string of at least 32 characters
+   - `NODE_ENV` = `production`
+   - `NODE_OPTIONS` = `--max-old-space-size=384`
+7. Health check path: `/api/health`
+8. Create Web Service.
+
+Do not add a disk. Free web services cannot use one.
+
+### Blueprint
+
+`render.yaml` is already set to `plan: free`. In the dashboard choose New Blueprint Instance, pick this repo, and apply. If Render asks for a payment method for Blueprints, use the Dashboard flow above instead. It is still free when the instance type is Free.
 
 ## Stack
 

@@ -2,7 +2,7 @@ services:
   - type: web
     name: redact
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
@@ -11,11 +11,7 @@ services:
         value: "22"
       - key: SESSION_SECRET
         generateValue: true
-      - key: DATA_DIR
-        value: /var/data
       - key: NODE_ENV
         value: production
-    disk:
-      name: redact-data
-      mountPath: /var/data
-      sizeGB: 1
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384

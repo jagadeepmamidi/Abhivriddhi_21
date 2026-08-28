@@ -45,6 +45,8 @@ next-env.d.ts
 /data/*.db
 /data/*.db-*
 /data/*.log
+eng.traineddata
+*.traineddata
 
 # agent skill copies
 .agents/
