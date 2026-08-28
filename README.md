@@ -4,12 +4,6 @@ A deployable data-protection workspace. Redact, mask, or anonymize personal data
 
 This is a rebuild of the original Streamlit + Ganache prototype. The product plan is the same. The architecture is not.
 
-## Why the old stack could not ship
-
-- Streamlit was a single 900-line script with broken contract calls, hardcoded Firebase keys, and a local filesystem for downloads.
-- Ganache (`127.0.0.1:7545`) is a local Ethereum simulator. It does not exist on Streamlit Community Cloud, Render, or any hosted web service.
-- The Solidity `addLog` ABI did not match what the Python app sent, and `getUserLogs` was never on the contract.
-
 ## What replaced Ganache
 
 Audit records now live in SQLite as a **hash chain**: each row stores `previous_hash` and `chain_hash = sha256(prev|user|action|data|time)`. The Logs screen verifies the chain. That is the hosted equivalent of a local blockchain: tamper-evident, no wallet, no gas, no node.
